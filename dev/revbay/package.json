@@ -1,0 +1,40 @@
+{
+  "name": "revbay",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "packages/*",
+    "apps/*",
+    "infrastructure/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:integration": "jest --config jest.config.js",
+    "test:payment-flow": "jest --config jest.config.js tests/integration/payment-flow.test.ts",
+    "test:stripe": "jest --config jest.config.js tests/integration/stripe-integration.test.ts",
+    "test:celcoin": "jest --config jest.config.js tests/integration/celcoin-integration.test.ts",
+    "test:database": "jest --config jest.config.js tests/integration/database-persistence.test.ts",
+    "test:watch": "jest --config jest.config.js --watch",
+    "test:coverage": "jest --config jest.config.js --coverage",
+    "type-check": "turbo run type-check",
+    "db:generate": "cd infrastructure/database && npx prisma generate",
+    "db:migrate": "cd infrastructure/database && npx prisma migrate dev",
+    "db:studio": "cd infrastructure/database && npx prisma studio"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "turbo": "^1.10.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.0"
+  }
+}
