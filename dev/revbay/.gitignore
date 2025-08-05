@@ -5,8 +5,32 @@ node_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.test
 dist/
 build/
 .DS_Store
 coverage/
 .nyc_output/
+
+# Security - Never commit these
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+config/secrets.json
+secrets/
+private/
+
+# IDE and OS files
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temporary files  
+logs/
+*.pid
+*.seed
+*.pid.lock

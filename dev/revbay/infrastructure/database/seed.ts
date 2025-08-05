@@ -8,7 +8,7 @@ async function main() {
     data: {
       email: 'test@revbay.com',
       name: 'Test Customer',
-      apiKey: 'sk_revbay_test123456789abcdef',
+      apiKey: process.env.TEST_API_KEY || 'generated_test_key_replace_in_production',
       metadata: {
         plan: 'development',
         source: 'seed_script'
