@@ -1,0 +1,320 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  apiKey    String   @unique
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+  payments      Payment[]
+  usageEvents   UsageEvent[]
+  invoices      Invoice[]
+  checkouts     Checkout[]
+
+  @@map("customers")
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  type        ProductType
+  unitName    String      // "API call", "token", "outcome", "month"
+  metadata    Json?
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  usageEvents       UsageEvent[]
+  productPricing    ProductPricing[]
+  invoiceLineItems  InvoiceLineItem[]
+  checkoutLineItems CheckoutLineItem[]
+
+  @@map("products")
+}
+
+model Plan {
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  currency      String        // ISO currency code
+  interval      PlanInterval?
+  intervalCount Int?
+  baseAmount    Int?          // Base subscription fee in smallest currency unit
+  features      String[]      // Array of feature descriptions
+  metadata      Json?
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  subscriptions  Subscription[]
+  productPricing ProductPricing[]
+
+  @@map("plans")
+}
+
+model ProductPricing {
+  id        String       @id @default(cuid())
+  planId    String
+  productId String
+  pricingModel PricingModel
+  
+  // Simple pricing
+  fixedPrice    Int?       // Fixed price in smallest currency unit
+  pricePerUnit  Int?       // Simple per-unit pricing
+  
+  // Tiered pricing (stored as JSON)
+  tiers         Json?      // Array of PricingTier objects
+  
+  // Outcome-based pricing
+  valueMultiplier      Float?  // Multiply by outcome_value
+  complexityMultiplier Json?   // Tiers based on complexity_score
+  satisfactionBonus    Json?   // Bonus based on satisfaction
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  plan    Plan    @relation(fields: [planId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([planId, productId])
+  @@map("product_pricing")
+}
+
+model Subscription {
+  id                  String            @id @default(cuid())
+  customerId          String
+  planId              String
+  status              SubscriptionStatus
+  currentPeriodStart  DateTime
+  currentPeriodEnd    DateTime
+  cancelAtPeriodEnd   Boolean           @default(false)
+  metadata            Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id])
+  plan     Plan     @relation(fields: [planId], references: [id])
+  invoices Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  customerId    String
+  amount        Int           // Amount in smallest currency unit (cents)
+  currency      String        // ISO currency code
+  status        PaymentStatus
+  paymentMethod PaymentMethod
+  
+  // Internal processor tracking (not exposed to users)
+  processor     PaymentProcessor
+  processorId   String?       // ID from Stripe/Celcoin
+  processorMetadata Json?     // Additional processor data
+  
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id])
+  invoices Invoice[] @relation("InvoicePayment")
+
+  @@map("payments")
+}
+
+model UsageEvent {
+  id         String    @id @default(cuid())
+  customerId String
+  productId  String
+  quantity   Int
+  timestamp  DateTime  @default(now())
+  metadata   Json?     // Store all usage metadata as JSON
+  processed  Boolean   @default(false) // For billing aggregation
+  createdAt  DateTime  @default(now())
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([customerId, timestamp])
+  @@index([processed])
+  @@index([productId, timestamp])
+  @@map("usage_events")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  customerId     String
+  subscriptionId String?
+  amount         Int           // Total amount in smallest currency unit
+  currency       String
+  status         InvoiceStatus
+  dueDate        DateTime
+  paidAt         DateTime?
+  paymentId      String?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  subscription Subscription?     @relation(fields: [subscriptionId], references: [id])
+  payment      Payment?          @relation("InvoicePayment", fields: [paymentId], references: [id])
+  lineItems    InvoiceLineItem[]
+
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String       @id @default(cuid())
+  invoiceId   String
+  productId   String
+  description String
+  amount      Int          // Amount in smallest currency unit
+  quantity    Int
+  unitPrice   Int          // Price per unit
+  type        LineItemType
+  periodStart DateTime?
+  periodEnd   DateTime?
+  metadata    Json?
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("invoice_line_items")
+}
+
+model Checkout {
+  id             String             @id @default(cuid())
+  customerId     String?            // Optional for guest checkouts
+  mode           CheckoutMode
+  amount         Int                // Total amount in smallest currency unit
+  currency       String
+  status         CheckoutStatus
+  successUrl     String?
+  cancelUrl      String?
+  paymentMethods PaymentMethod[]
+  metadata       Json?
+  expiresAt      DateTime
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // Relations
+  customer  Customer?           @relation(fields: [customerId], references: [id])
+  lineItems CheckoutLineItem[]
+
+  @@map("checkouts")
+}
+
+model CheckoutLineItem {
+  id         String @id @default(cuid())
+  checkoutId String
+  productId  String
+  quantity   Int
+  amount     Int    // Total amount for this line item
+
+  // Relations
+  checkout Checkout @relation(fields: [checkoutId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@map("checkout_line_items")
+}
+
+// Enums
+enum ProductType {
+  USAGE_BASED
+  OUTCOME_BASED
+  RECURRING
+  ONE_TIME
+}
+
+enum PricingModel {
+  ONE_TIME
+  USAGE_BASED
+  TIERED_USAGE
+  VALUE_BASED
+  COMPLEXITY_BASED
+  HYBRID
+}
+
+enum PlanInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  PAUSED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum PaymentMethod {
+  CARD
+  PIX
+  BOLETO
+}
+
+enum PaymentProcessor {
+  STRIPE
+  CELCOIN
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+enum LineItemType {
+  RECURRING
+  USAGE_BASED
+  OUTCOME_BASED
+  ONE_TIME
+  DISCOUNT
+}
+
+enum CheckoutMode {
+  PAYMENT
+  SUBSCRIPTION
+  SETUP
+}
+
+enum CheckoutStatus {
+  OPEN
+  COMPLETE
+  EXPIRED
+}
